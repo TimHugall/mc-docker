@@ -76,7 +76,7 @@ locals {
   ])
 }
 
-# Create NSG security rules to allow traffic from East Coast Australia IPs
+# Create NSG security rules to allow traffic from Australia IPs
 # Note: OCI NSGs have different limits than Azure (check current OCI documentation)
 resource "oci_core_network_security_group_security_rule" "allow_east_coast_au" {
   for_each = { for rule in local.security_rules : rule.rule_id => rule }
@@ -84,15 +84,16 @@ resource "oci_core_network_security_group_security_rule" "allow_east_coast_au" {
   network_security_group_id = data.oci_core_network_security_group.main.id
   direction                 = "INGRESS"
   protocol                  = each.value.protocol
+  source                    = each.value.source
+  source_type               = "CIDR_BLOCK"
 
-  description = each.value.description
-  source      = each.value.source
-  source_type = "CIDR_BLOCK"
-
-  tcp_options {
-    destination_port_range {
-      min = each.value.port
-      max = each.value.port
+  dynamic "tcp_options" {
+    for_each = each.value.protocol == "6" ? [1] : []
+    content {
+      destination_port_range {
+        min = each.value.port
+        max = each.value.port
+      }
     }
   }
 }
