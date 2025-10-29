@@ -1,8 +1,8 @@
 terraform {
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 5.0"
     }
     http = {
       source  = "hashicorp/http"
@@ -11,93 +11,88 @@ terraform {
   }
 }
 
-provider "azurerm" {
-  features {}
+provider "oci" {
+  # Authentication is typically done via:
+  # - Config file (~/.oci/config)
+  # - Environment variables
+  # - Instance principal (when running on OCI compute)
 }
 
-# Data source to reference existing resource group
-data "azurerm_resource_group" "main" {
-  name = var.resource_group_name
+# Data source to reference existing compartment
+data "oci_identity_compartment" "main" {
+  id = var.compartment_id
 }
 
-# Data source to reference existing virtual machine
-data "azurerm_virtual_machine" "main" {
-  name                = var.vm_name
-  resource_group_name = data.azurerm_resource_group.main.name
+# Data source to reference existing compute instance
+data "oci_core_instance" "main" {
+  instance_id = var.instance_id
 }
 
 # Data source to reference existing Network Security Group
-data "azurerm_network_security_group" "main" {
-  name                = var.nsg_name
-  resource_group_name = data.azurerm_resource_group.main.name
+data "oci_core_network_security_group" "main" {
+  network_security_group_id = var.nsg_id
 }
 
-# Fetch the Azure IP Ranges and Service Tags JSON from Microsoft
-# This is updated weekly by Microsoft
-# To get the latest URL, visit: https://www.microsoft.com/en-us/download/details.aspx?id=56519
-# and update the azure_ip_ranges_url variable
-data "http" "azure_ip_ranges" {
-  url = var.azure_ip_ranges_url
+# Fetch IP ranges for East Coast Australia
+# Oracle doesn't provide a similar service tags JSON like Azure/AWS
+# Instead, we'll use a GeoIP-based approach with publicly available IP ranges
+# This fetches Australia IP ranges from a reliable source
+data "http" "australia_ip_ranges" {
+  url = "https://stat.ripe.net/data/country-resource-list/data.json?resource=AU&v4_format=prefix"
 
   request_headers = {
     Accept = "application/json"
   }
 }
 
-# Parse the JSON to extract IP prefixes for Australia East and Australia Southeast
+# Parse the JSON to extract IP prefixes for Australia
+# Note: This includes ALL of Australia, not just the east coast
+# For more precise geo-filtering, you may need to use commercial GeoIP services
 locals {
-  azure_ip_data = jsondecode(data.http.azure_ip_ranges.response_body)
+  australia_ip_data = jsondecode(data.http.australia_ip_ranges.response_body)
 
-  # Find the Australia East region IP prefixes
-  australia_east = [
-    for service in local.azure_ip_data.values : service
-    if service.name == "AzureCloud.australiaeast"
-  ]
+  # Extract IPv4 prefixes for Australia
+  australia_prefixes = try(local.australia_ip_data.data.resources.ipv4, [])
 
-  # Find the Australia Southeast region IP prefixes
-  australia_southeast = [
-    for service in local.azure_ip_data.values : service
-    if service.name == "AzureCloud.australiasoutheast"
-  ]
+  # For more precise filtering to East Coast Australia, you could:
+  # 1. Use a commercial GeoIP database
+  # 2. Manually specify known ISP ranges for Sydney/Melbourne/Brisbane
+  # 3. Use Oracle's Cloud Guard with geographic restrictions
+  # This configuration uses all Australian IPs as a starting point
+  east_coast_au_prefixes = local.australia_prefixes
 
-  # Combine all East Coast Australia IP prefixes
-  # Note: This represents Azure infrastructure in these regions, not all AU east coast IPs
-  # For a more comprehensive solution, you might want to use GeoIP databases
-  east_coast_au_prefixes = concat(
-    length(local.australia_east) > 0 ? local.australia_east[0].properties.addressPrefixes : [],
-    length(local.australia_southeast) > 0 ? local.australia_southeast[0].properties.addressPrefixes : []
-  )
-
-  # Create a flattened list of rules (port + IP prefix combinations)
-  # We need to create separate rules as Azure NSG doesn't support multiple source prefixes in a single rule easily
-  nsg_rules = flatten([
+  # Create security rules for each port and IP prefix combination
+  # OCI NSGs support multiple rules, similar to Azure
+  security_rules = flatten([
     for port_idx, port in var.allowed_ports : [
       for prefix_idx, prefix in local.east_coast_au_prefixes : {
-        name          = "Allow-${port}-from-AU-East-${port_idx}-${prefix_idx}"
-        priority      = var.rule_priority_start + (port_idx * 1000) + prefix_idx
-        port          = port
-        source_prefix = prefix
+        description = "Allow port ${port} from AU IP ${prefix_idx}"
+        source      = prefix
+        protocol    = "6" # TCP
+        port        = port
+        rule_id     = "${port_idx}-${prefix_idx}"
       }
     ]
   ])
 }
 
-# Create NSG rules to allow traffic from East Coast Australia IPs
-# Note: Azure NSG has a limit on number of rules (typically 1000 per NSG)
-# The Azure IP ranges can contain hundreds of prefixes, so we create individual rules
-resource "azurerm_network_security_rule" "allow_east_coast_au" {
-  for_each = { for rule in local.nsg_rules : rule.name => rule }
+# Create NSG security rules to allow traffic from East Coast Australia IPs
+# Note: OCI NSGs have different limits than Azure (check current OCI documentation)
+resource "oci_core_network_security_group_security_rule" "allow_east_coast_au" {
+  for_each = { for rule in local.security_rules : rule.rule_id => rule }
 
-  name                        = each.value.name
-  priority                    = each.value.priority
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = tostring(each.value.port)
-  source_address_prefix       = each.value.source_prefix
-  destination_address_prefix  = "*"
-  resource_group_name         = data.azurerm_resource_group.main.name
-  network_security_group_name = data.azurerm_network_security_group.main.name
-  description                 = "Allow port ${each.value.port} from East Coast Australia IP ranges - Auto-generated, update regularly"
+  network_security_group_id = data.oci_core_network_security_group.main.id
+  direction                 = "INGRESS"
+  protocol                  = each.value.protocol
+
+  description = each.value.description
+  source      = each.value.source
+  source_type = "CIDR_BLOCK"
+
+  tcp_options {
+    destination_port_range {
+      min = each.value.port
+      max = each.value.port
+    }
+  }
 }

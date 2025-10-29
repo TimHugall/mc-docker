@@ -1,12 +1,14 @@
-# Example Terraform variables file
+# Example Terraform variables file for Oracle Cloud Infrastructure
 # Copy this to terraform.tfvars and update with your actual values
 
-resource_group_name = "my-resource-group"
-vm_name             = "my-minecraft-server"
-nsg_name            = "my-nsg"
+# OCID of your compartment (looks like: ocid1.compartment.oc1..aaaa...)
+compartment_id = "ocid1.compartment.oc1..your-compartment-ocid"
+
+# OCID of your compute instance (looks like: ocid1.instance.oc1..aaaa...)
+instance_id = "ocid1.instance.oc1..your-instance-ocid"
+
+# OCID of your Network Security Group (looks like: ocid1.networksecuritygroup.oc1..aaaa...)
+nsg_id = "ocid1.networksecuritygroup.oc1..your-nsg-ocid"
 
 # Optional: customize allowed ports (defaults to SSH and Minecraft)
 # allowed_ports = [22, 25565]
-
-# Optional: customize starting priority for NSG rules (default is 100)
-# rule_priority_start = 100

@@ -1,31 +1,26 @@
-output "resource_group_name" {
-  description = "Name of the resource group"
-  value       = data.azurerm_resource_group.main.name
+output "compartment_id" {
+  description = "OCID of the compartment"
+  value       = data.oci_identity_compartment.main.id
 }
 
-output "vm_name" {
-  description = "Name of the virtual machine"
-  value       = data.azurerm_virtual_machine.main.name
-}
-
-output "nsg_name" {
-  description = "Name of the Network Security Group"
-  value       = data.azurerm_network_security_group.main.name
+output "instance_id" {
+  description = "OCID of the compute instance"
+  value       = data.oci_core_instance.main.id
 }
 
 output "nsg_id" {
-  description = "ID of the Network Security Group"
-  value       = data.azurerm_network_security_group.main.id
+  description = "OCID of the Network Security Group"
+  value       = data.oci_core_network_security_group.main.id
 }
 
 output "east_coast_au_ip_count" {
-  description = "Number of East Coast Australia IP prefixes found"
+  description = "Number of Australia IP prefixes found"
   value       = length(local.east_coast_au_prefixes)
 }
 
 output "total_rules_created" {
-  description = "Total number of NSG rules created"
-  value       = length(local.nsg_rules)
+  description = "Total number of NSG security rules created"
+  value       = length(local.security_rules)
 }
 
 output "allowed_ports" {
