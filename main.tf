@@ -72,48 +72,68 @@ locals {
   )
 
   # Create security rules for each combination of port and IP range
-  security_rules = flatten([
-    for port in var.allowed_ports : [
+  # Split into TCP and UDP rules to avoid OCI provider issues
+  tcp_rules = flatten([
+    for port in [22] : [
       for idx, cidr in local.all_au_ranges : {
         description = "Allow port ${port} from AU CIDR ${cidr}"
         source      = cidr
-        protocol    = port == 19132 || port == 19133 ? "17" : "6" # UDP for Minecraft Bedrock, TCP otherwise
+        protocol    = "6"
         port        = port
-        rule_id     = "${port}-${idx}"
+        rule_id     = "tcp-${port}-${idx}"
+      }
+    ]
+  ])
+
+  udp_rules = flatten([
+    for port in [19132, 19133] : [
+      for idx, cidr in local.all_au_ranges : {
+        description = "Allow port ${port} from AU CIDR ${cidr}"
+        source      = cidr
+        protocol    = "17"
+        port        = port
+        rule_id     = "udp-${port}-${idx}"
       }
     ]
   ])
 }
 
-# Create NSG security rules to allow traffic from Australian ISPs
-resource "oci_core_network_security_group_security_rule" "allow_au_isps" {
-  for_each = { for rule in local.security_rules : rule.rule_id => rule }
+# Create NSG security rules for TCP traffic (SSH)
+resource "oci_core_network_security_group_security_rule" "allow_au_tcp" {
+  for_each = { for rule in local.tcp_rules : rule.rule_id => rule }
 
   network_security_group_id = data.oci_core_network_security_group.main.id
   direction                 = "INGRESS"
-  protocol                  = each.value.protocol
+  protocol                  = "6"
   source                    = each.value.source
   source_type               = "CIDR_BLOCK"
   description               = each.value.description
   stateless                 = false
 
-  dynamic "tcp_options" {
-    for_each = each.value.protocol == "6" ? [1] : []
-    content {
-      destination_port_range {
-        min = each.value.port
-        max = each.value.port
-      }
+  tcp_options {
+    destination_port_range {
+      min = each.value.port
+      max = each.value.port
     }
   }
+}
 
-  dynamic "udp_options" {
-    for_each = each.value.protocol == "17" ? [1] : []
-    content {
-      destination_port_range {
-        min = each.value.port
-        max = each.value.port
-      }
+# Create NSG security rules for UDP traffic (Minecraft Bedrock)
+resource "oci_core_network_security_group_security_rule" "allow_au_udp" {
+  for_each = { for rule in local.udp_rules : rule.rule_id => rule }
+
+  network_security_group_id = data.oci_core_network_security_group.main.id
+  direction                 = "INGRESS"
+  protocol                  = "17"
+  source                    = each.value.source
+  source_type               = "CIDR_BLOCK"
+  description               = each.value.description
+  stateless                 = false
+
+  udp_options {
+    destination_port_range {
+      min = each.value.port
+      max = each.value.port
     }
   }
 }

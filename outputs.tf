@@ -20,7 +20,7 @@ output "allowed_ports" {
 
 output "total_rules_created" {
   description = "Total number of NSG security rules created"
-  value       = length(local.security_rules)
+  value       = length(local.tcp_rules) + length(local.udp_rules)
 }
 
 output "australian_isp_ranges" {
