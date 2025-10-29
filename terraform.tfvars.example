@@ -4,8 +4,8 @@
 # OCID of your compartment (looks like: ocid1.compartment.oc1..aaaa...)
 compartment_id = "ocid1.compartment.oc1..your-compartment-ocid"
 
-# OCID of your compute instance (looks like: ocid1.instance.oc1..aaaa...)
-instance_id = "ocid1.instance.oc1..your-instance-ocid"
+# OCID of your compute instance
+instance_id = "ocid1.instance.oc1.ap-sydney-1.anzxsljrv7ftnnacuaoiokz7t5k6pfklmonmntedha7hgf5l5t56x6fsmwza"
 
 # OCID of your Network Security Group (looks like: ocid1.networksecuritygroup.oc1..aaaa...)
 nsg_id = "ocid1.networksecuritygroup.oc1..your-nsg-ocid"
