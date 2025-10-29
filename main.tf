@@ -4,6 +4,10 @@ terraform {
       source  = "oracle/oci"
       version = "~> 5.0"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -14,105 +18,116 @@ provider "oci" {
   # - Instance principal (when running on OCI compute)
 }
 
-# Data source to reference existing Network Security Group
-data "oci_core_network_security_group" "main" {
-  network_security_group_id = var.nsg_id
+# Data source to get the VCN from the subnet
+data "oci_core_instance" "main" {
+  instance_id = var.instance_id
 }
 
-# Locals for Australian ISP CIDR ranges
-# These are the major ISP ranges that cover 95%+ of Australian residential/mobile IPs
+data "oci_core_vnic_attachments" "main" {
+  compartment_id = var.compartment_id
+  instance_id    = var.instance_id
+}
+
+data "oci_core_vnic" "main" {
+  vnic_id = data.oci_core_vnic_attachments.main.vnic_attachments[0].vnic_id
+}
+
+data "oci_core_subnet" "main" {
+  subnet_id = data.oci_core_vnic.main.subnet_id
+}
+
+# Fetch Australia IP ranges from RIPE NCC
+data "http" "australia_ip_ranges" {
+  url = "https://stat.ripe.net/data/country-resource-list/data.json?resource=AU&v4_format=prefix"
+
+  request_headers = {
+    Accept = "application/json"
+  }
+}
+
+# Locals for dynamic Australian IP ranges
 locals {
-  # Major Australian ISPs - Telstra ranges (primary east coast provider)
-  telstra_ranges = [
-    "1.128.0.0/11",
-    "49.176.0.0/13",
-    "58.160.0.0/12",
-    "101.160.0.0/11"
-  ]
-
-  # Optus ranges (major east coast ISP)
-  optus_ranges = [
-    "14.0.0.0/11",
-    "58.6.0.0/15",
-    "110.20.0.0/14"
-  ]
-
-  # TPG/iiNet/Internode ranges (common east coast)
-  tpg_ranges = [
-    "27.32.0.0/11",
-    "58.96.0.0/12"
-  ]
-
-  # Vodafone Australia ranges
-  vodafone_ranges = [
-    "121.200.0.0/13"
-  ]
-
-  # NBN Co ranges (National Broadband Network)
-  nbn_ranges = [
-    "101.0.0.0/14",
-    "103.1.128.0/17"
-  ]
-
-  # Additional common Australian ranges with east coast presence
-  misc_au_ranges = [
-    "124.148.0.0/14",
-    "180.150.0.0/15",
-    "203.0.0.0/13"
-  ]
-
-  # Combine all ranges
-  all_au_ranges = concat(
-    local.telstra_ranges,
-    local.optus_ranges,
-    local.tpg_ranges,
-    local.vodafone_ranges,
-    local.nbn_ranges,
-    local.misc_au_ranges
-  )
-
-  # Create security rules for each combination of port and IP range
-  security_rules = flatten([
-    for port in var.allowed_ports : [
-      for idx, cidr in local.all_au_ranges : {
-        description = "Allow port ${port} from AU CIDR ${cidr}"
-        source      = cidr
-        protocol    = port == 19132 || port == 19133 ? "17" : "6" # UDP for Minecraft Bedrock, TCP otherwise
-        port        = port
-        rule_id     = "${port}-${idx}"
-      }
-    ]
+  australia_ip_data = jsondecode(data.http.australia_ip_ranges.response_body)
+  australia_prefixes = try(local.australia_ip_data.data.resources.ipv4, [])
+  
+  # Security Lists have limits too - OCI allows up to 25 stateful ingress rules per security list
+  # We'll aggregate by taking larger CIDR blocks (smaller prefix lengths = larger blocks)
+  # Sort by prefix length and take the first 20 largest blocks
+  sorted_prefixes = sort([
+    for prefix in local.australia_prefixes : {
+      cidr = prefix
+      # Extract prefix length (e.g., "192.168.0.0/24" -> 24)
+      prefix_len = tonumber(split("/", prefix)[1])
+    }
   ])
+  
+  # Sort by prefix length (ascending) to get largest blocks first
+  largest_au_blocks = [
+    for item in slice(
+      sort([for p in local.australia_prefixes : p]),
+      0,
+      min(20, length(local.australia_prefixes))
+    ) : item
+  ]
 }
 
-# Create NSG security rules to allow traffic from Australian ISPs
-resource "oci_core_network_security_group_security_rule" "allow_au_isps" {
-  for_each = { for rule in local.security_rules : rule.rule_id => rule }
+# Create a Security List for Australian traffic
+resource "oci_core_security_list" "australia_minecraft" {
+  compartment_id = var.compartment_id
+  vcn_id         = data.oci_core_subnet.main.vcn_id
+  display_name   = "australia-minecraft-dynamic-ips"
 
-  network_security_group_id = data.oci_core_network_security_group.main.id
-  direction                 = "INGRESS"
-  protocol                  = each.value.protocol
-  source                    = each.value.source
-  source_type               = "CIDR_BLOCK"
-  description               = each.value.description
-  stateless                 = false
+  # Egress - allow all outbound
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+    stateless   = false
+  }
 
-  dynamic "tcp_options" {
-    for_each = each.value.protocol == "6" ? [1] : []
+  # Ingress - SSH from Australian IPs (TCP port 22)
+  dynamic "ingress_security_rules" {
+    for_each = local.largest_au_blocks
     content {
-      destination_port_range {
-        min = each.value.port
-        max = each.value.port
+      protocol    = "6" # TCP
+      source      = ingress_security_rules.value
+      stateless   = false
+      description = "SSH from AU IP ${ingress_security_rules.value}"
+      
+      tcp_options {
+        min = 22
+        max = 22
       }
     }
   }
 
-  dynamic "udp_options" {
-    for_each = each.value.protocol == "17" ? [1] : []
+  # Ingress - Minecraft Bedrock port 19132 (UDP)
+  dynamic "ingress_security_rules" {
+    for_each = local.largest_au_blocks
     content {
-      destination_port_range {
-        min = each.value.port
-        max = each.value.port
+      protocol    = "17" # UDP
+      source      = ingress_security_rules.value
+      stateless   = false
+      description = "Minecraft Bedrock 19132 from AU IP ${ingress_security_rules.value}"
+      
+      udp_options {
+        min = 19132
+        max = 19132
+      }
+    }
+  }
+
+  # Ingress - Minecraft Bedrock port 19133 (UDP)
+  dynamic "ingress_security_rules" {
+    for_each = local.largest_au_blocks
+    content {
+      protocol    = "17" # UDP
+      source      = ingress_security_rules.value
+      stateless   = false
+      description = "Minecraft Bedrock 19133 from AU IP ${ingress_security_rules.value}"
+      
+      udp_options {
+        min = 19133
+        max = 19133
       }
     }
   }
