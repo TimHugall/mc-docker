@@ -1,16 +1,16 @@
 output "compartment_id" {
   description = "OCID of the compartment"
-  value       = data.oci_identity_compartment.main.id
+  value       = var.compartment_id
 }
 
 output "instance_id" {
   description = "OCID of the compute instance"
-  value       = data.oci_core_instance.main.id
+  value       = var.instance_id
 }
 
 output "nsg_id" {
   description = "OCID of the Network Security Group"
-  value       = data.oci_core_network_security_group.main.id
+  value       = var.nsg_id
 }
 
 output "allowed_ports" {
