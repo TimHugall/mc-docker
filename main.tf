@@ -108,7 +108,6 @@ resource "oci_core_network_security_group_security_rule" "allow_au_tcp" {
   source                    = each.value.source
   source_type               = "CIDR_BLOCK"
   description               = each.value.description
-  stateless                 = false
 
   tcp_options {
     destination_port_range {
@@ -128,7 +127,6 @@ resource "oci_core_network_security_group_security_rule" "allow_au_udp" {
   source                    = each.value.source
   source_type               = "CIDR_BLOCK"
   description               = each.value.description
-  stateless                 = false
 
   udp_options {
     destination_port_range {
