@@ -14,8 +14,13 @@ output "nsg_id" {
 }
 
 output "allowed_ports" {
-  description = "List of ports allowed from Australian IPs"
+  description = "List of ports allowed"
   value       = var.allowed_ports
+}
+
+output "geo_restriction_enabled" {
+  description = "Whether geographic IP restriction is enabled"
+  value       = var.enable_geo_restriction
 }
 
 output "total_rules_created" {
@@ -24,6 +29,11 @@ output "total_rules_created" {
 }
 
 output "australian_isp_ranges" {
-  description = "Number of Australian ISP CIDR ranges configured"
-  value       = length(local.all_au_ranges)
+  description = "Number of Australian ISP CIDR ranges configured (only when geo-restriction enabled)"
+  value       = var.enable_geo_restriction ? length(local.all_au_ranges) : 0
+}
+
+output "access_mode" {
+  description = "Current access mode: Australian-only or Worldwide"
+  value       = var.enable_geo_restriction ? "Australian IPs only" : "Worldwide access"
 }

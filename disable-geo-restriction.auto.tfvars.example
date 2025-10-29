@@ -1,0 +1,4 @@
+# Example: Disable geo-restriction to allow worldwide access
+# Rename this file to disable-geo-restriction.auto.tfvars to use it
+
+enable_geo_restriction = false

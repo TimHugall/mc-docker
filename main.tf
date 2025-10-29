@@ -71,12 +71,18 @@ locals {
     local.misc_au_ranges
   )
 
+  # Worldwide access CIDR (0.0.0.0/0) when geo-restriction is disabled
+  worldwide_ranges = ["0.0.0.0/0"]
+
+  # Choose ranges based on geo-restriction setting
+  active_ranges = var.enable_geo_restriction ? local.all_au_ranges : local.worldwide_ranges
+
   # Create security rules for each combination of port and IP range
   # Split into TCP and UDP rules to avoid OCI provider issues
   tcp_rules = flatten([
     for port in [22] : [
-      for idx, cidr in local.all_au_ranges : {
-        description = "Allow port ${port} from AU CIDR ${cidr}"
+      for idx, cidr in local.active_ranges : {
+        description = var.enable_geo_restriction ? "Allow port ${port} from AU CIDR ${cidr}" : "Allow port ${port} worldwide"
         source      = cidr
         protocol    = "6"
         port        = port
@@ -87,8 +93,8 @@ locals {
 
   udp_rules = flatten([
     for port in [19132, 19133] : [
-      for idx, cidr in local.all_au_ranges : {
-        description = "Allow port ${port} from AU CIDR ${cidr}"
+      for idx, cidr in local.active_ranges : {
+        description = var.enable_geo_restriction ? "Allow port ${port} from AU CIDR ${cidr}" : "Allow port ${port} worldwide"
         source      = cidr
         protocol    = "17"
         port        = port

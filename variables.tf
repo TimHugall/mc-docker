@@ -18,3 +18,9 @@ variable "allowed_ports" {
   type        = list(number)
   default     = [22, 19132, 19133] # SSH and Minecraft Bedrock ports
 }
+
+variable "enable_geo_restriction" {
+  description = "Enable Australian-only IP filtering. Set to false to allow worldwide access."
+  type        = bool
+  default     = true
+}
