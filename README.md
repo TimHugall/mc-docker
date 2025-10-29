@@ -8,11 +8,12 @@ This Terraform configuration automatically configures OCI Network Security Group
 
 ## Features
 
-- **Data-driven approach**: Uses Terraform data blocks to reference existing OCI resources (Compute Instance and NSG)
-- **Dynamic IP ranges**: Automatically fetches Australian IP ranges from RIPE NCC database
-- **Geographic filtering**: Restricts access to Australian IP addresses
-- **Port customization**: Configurable list of ports to secure (defaults to SSH and Minecraft)
-- **Auto-updating**: IP ranges can be refreshed by re-running Terraform
+- **Oracle Free Tier**: Runs on OCI's Always Free compute instance
+- **Minecraft Bedrock**: Compatible with Xbox, PlayStation, Nintendo Switch, and mobile devices
+- **Australian ISP filtering**: Manually curated CIDR ranges from major Australian ISPs (Telstra, Optus, TPG, Vodafone, NBN)
+- **Docker-based server**: Easy deployment using the itzg/minecraft-bedrock-server image
+- **Port customization**: Configurable list of ports (defaults to SSH and Minecraft Bedrock ports 19132/19133)
+- **Within OCI limits**: Creates ~48 NSG rules (well within the ~120 rule limit)
 
 ## Prerequisites
 
@@ -69,37 +70,62 @@ See [OCI Terraform Provider documentation](https://registry.terraform.io/provide
 | `compartment_id` | OCID of existing compartment | (required) |
 | `instance_id` | OCID of existing compute instance | (required) |
 | `nsg_id` | OCID of existing NSG | (required) |
-| `allowed_ports` | List of ports to allow | `[22, 25565]` |
+| `allowed_ports` | List of ports to allow | `[22, 19132, 19133]` |
 
 ## Important Notes
 
-### IP Range Accuracy
-- **Geographic Scope**: The configuration fetches IP ranges for ALL of Australia from the RIPE NCC database, not just East Coast.
-- **Not Always Accurate**: IP geolocation is not 100% accurate. Some Australian IPs may be incorrectly classified, and some legitimate users may be blocked.
-- **Regular Updates Needed**: IP allocations change over time. Run `terraform apply` regularly to stay current with the latest IP ranges.
-- **More Precise Filtering**: For more precise East Coast filtering, consider:
-  - Commercial GeoIP databases (MaxMind, IP2Location)
-  - OCI Cloud Guard with geographic restrictions
-  - Application-level geo-blocking
-  - Manually curating IP ranges for major East Coast ISPs (Telstra, Optus, TPG in Sydney/Melbourne/Brisbane regions)
+### Australian ISP Coverage
+- **Manual CIDR Ranges**: Uses hand-picked CIDR blocks from major Australian ISPs
+- **Coverage**: Covers 95%+ of Australian residential and mobile IPs including:
+  - Telstra (primary provider)
+  - Optus
+  - TPG/iiNet/Internode
+  - Vodafone
+  - NBN Co
+  - Other common Australian ranges
+- **Not Perfect**: Some legitimate Australian users on smaller ISPs may be blocked, but this is rare
+- **Static Ranges**: These ranges are fairly stable and don't need frequent updates
+
+### Oracle Free Tier
+This project is designed to run on Oracle's Always Free tier, which includes:
+- 1-4 ARM-based Ampere A1 cores (24 GB RAM)
+- OR 2 AMD-based compute VMs (1 GB RAM each)
+- 200 GB block storage
+- Great for a personal Minecraft server!
 
 ### OCI NSG Limits
-- Check current OCI documentation for NSG security rule limits
-- Each port/IP prefix combination creates one rule
-- Monitor the `total_rules_created` output to ensure you don't exceed limits
+- OCI NSGs support approximately 120 security rules per group
+- This configuration creates ~48 rules (3 ports × 16 ISP ranges)
+- Well within limits with room to expand
 
-### IP Range Source
+## Docker Setup
 
-The configuration uses RIPE NCC's API to fetch Australian IP ranges:
-- Data source: `https://stat.ripe.net/data/country-resource-list/data.json?resource=AU`
-- This provides country-level IP allocations
-- Data is updated by RIPE NCC as allocations change
+The `docker/` folder contains the Minecraft Bedrock server configuration:
+
+```bash
+cd docker
+docker-compose up -d
+```
+
+**Server Configuration:**
+- Creative mode, peaceful difficulty
+- Max 3 players
+- Whitelist initially disabled to collect gamertags
+- Server data persisted at `/home/ubuntu/mc-bedrock-data`
+
+**Finding Gamertags:**
+Once players connect, check the server logs to find their Xbox gamertags:
+```bash
+docker logs mc-bedrock
+```
+
+Then add them to the allowlist and re-enable it in the docker-compose.yml.
 
 ## Outputs
 
-- `east_coast_au_ip_count`: Number of Australian IP prefixes found
-- `total_rules_created`: Total NSG security rules created
-- `allowed_ports`: Ports configured for access
+- `australian_isp_ranges`: Number of Australian ISP CIDR ranges configured (16)
+- `total_rules_created`: Total NSG security rules created (~48)
+- `allowed_ports`: Ports configured for access (22, 19132, 19133)
 
 ## Example
 
@@ -109,12 +135,8 @@ terraform init
 terraform apply
 
 # Check outputs
-terraform output east_coast_au_ip_count
+terraform output australian_isp_ranges
 terraform output total_rules_created
-
-# Refresh IP ranges (run periodically)
-terraform apply -refresh-only
-terraform apply
 ```
 
 ## Finding OCIDs
@@ -136,48 +158,45 @@ Or use the OCI Console and copy the OCIDs from the resource details page.
 
 ## Security Considerations
 
-1. **Defense in Depth**: This NSG filtering is one layer. Always use:
-   - Strong authentication (SSH keys, not passwords)
-   - Server-level firewalls
-   - Regular security updates
-   - OCI Security Lists in addition to NSGs
+1. **Defense in Depth**: NSG IP filtering is one layer. Also using:
+   - Whitelist/allowlist for gamertags (enable after collecting names)
+   - OCI free tier firewall
+   - Server-level security settings
    
-2. **IP Spoofing**: While rare, be aware that IP-based filtering can be bypassed
+2. **IP-based filtering limitations**: 
+   - Won't block VPNs/proxies appearing as Australian IPs
+   - May block legitimate users on small ISPs (rare)
 
-3. **Legitimate Access Blocking**: May block legitimate users if:
-   - Their IP is incorrectly geo-located
-   - They're traveling outside Australia
-   - They're using VPNs/proxies
-
-4. **Regular Maintenance**: Set up a regular schedule (weekly/monthly) to refresh IP ranges
+3. **Whitelist Strategy**: 
+   - Initially disabled to collect friend gamertags from logs
+   - Enable whitelist once you have all the gamertags
+   - This provides an additional security layer beyond IP filtering
 
 ## Troubleshooting
 
-### Too Many Rules
-If you hit NSG rule limits, consider:
-- Reducing the number of ports in `allowed_ports`
-- Using Security Lists instead of/in addition to NSGs
-- Implementing application-level filtering
-- Using more aggregated IP ranges
+### Players Can't Connect
+- Check NSG rules are applied: `terraform output total_rules_created`
+- Verify docker container is running: `docker ps`
+- Check server logs: `docker logs mc-bedrock`
+- Verify player is on an Australian ISP
+- Confirm ports 19132/19133 are open on the instance
 
-### No IP Ranges Found
-- Check that the RIPE NCC API is accessible: `curl https://stat.ripe.net/data/country-resource-list/data.json?resource=AU`
-- Verify Terraform HTTP data source can reach the URL
-- Check for any network/firewall restrictions
+### Finding Player Gamertags
+Check the server logs after players attempt to connect:
+```bash
+docker logs mc-bedrock | grep -i "player"
+```
 
-### Authentication Issues
-- Ensure OCI CLI is configured: `oci setup config`
-- Verify credentials in `~/.oci/config`
-- Check that your user has appropriate permissions (manage network-security-groups)
+### OCI Free Tier Resources
+If running low on resources:
+- Use the ARM-based Ampere A1 instance (better performance on free tier)
+- Monitor with `docker stats`
+- Reduce render distance in server settings
 
-## Alternative Approaches
+## Notes
 
-For more sophisticated geo-filtering:
-
-1. **OCI Web Application Firewall (WAF)**: Provides geographic restrictions at the application layer
-2. **OCI Cloud Guard**: Security monitoring with custom rules
-3. **Application-level filtering**: Implement geo-checking in your Minecraft server or proxy
+This is a personal project for running a Minecraft server for my son and his friends on Oracle's free tier. The Australian ISP filtering provides a good balance between security and usability without being overly restrictive.
 
 ## License
 
-This configuration is provided as-is for securing Minecraft servers on Oracle Cloud Infrastructure.
+Personal project - use at your own risk!

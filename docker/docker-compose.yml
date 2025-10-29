@@ -19,7 +19,8 @@ services:
       DIFFICULTY: "peaceful" # Set to peaceful so no hostile mobs spawn
       MAX_PLAYERS: 3
       # Security (Set to true to only allow players on the whitelist)
-      ALLOW_LIST: "true"
+      # TEMPORARILY DISABLED to collect gamertags - re-enable after adding friends to allowlist
+      ALLOW_LIST: "false"
       # Optional: Set the initial player permissions level (member, operator, visitor)     
       DEFAULT_PLAYER_PERMISSION_LEVEL: "member"
       ENABLE_LAN_VISIBILITY: "false" # Don't broadcast on LAN
