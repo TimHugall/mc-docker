@@ -156,47 +156,11 @@ oci network nsg list --compartment-id <compartment-ocid>
 
 Or use the OCI Console and copy the OCIDs from the resource details page.
 
-## Security Considerations
-
-1. **Defense in Depth**: NSG IP filtering is one layer. Also using:
-   - Whitelist/allowlist for gamertags (enable after collecting names)
-   - OCI free tier firewall
-   - Server-level security settings
-   
-2. **IP-based filtering limitations**: 
-   - Won't block VPNs/proxies appearing as Australian IPs
-   - May block legitimate users on small ISPs (rare)
-
-3. **Whitelist Strategy**: 
-   - Initially disabled to collect friend gamertags from logs
-   - Enable whitelist once you have all the gamertags
-   - This provides an additional security layer beyond IP filtering
-
-## Troubleshooting
-
-### Players Can't Connect
-- Check NSG rules are applied: `terraform output total_rules_created`
-- Verify docker container is running: `docker ps`
-- Check server logs: `docker logs mc-bedrock`
-- Verify player is on an Australian ISP
-- Confirm ports 19132/19133 are open on the instance
-
 ### Finding Player Gamertags
 Check the server logs after players attempt to connect:
 ```bash
 docker logs mc-bedrock | grep -i "player"
 ```
-
-### OCI Free Tier Resources
-If running low on resources:
-- Use the ARM-based Ampere A1 instance (better performance on free tier)
-- Monitor with `docker stats`
-- Reduce render distance in server settings
-
-## Notes
-
-This is a personal project for running a Minecraft server for my son and his friends on Oracle's free tier. The Australian ISP filtering provides a good balance between security and usability without being overly restrictive.
-
 ## License
 
 Personal project - use at your own risk!
