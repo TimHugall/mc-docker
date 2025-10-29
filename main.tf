@@ -95,6 +95,7 @@ resource "oci_core_network_security_group_security_rule" "allow_au_isps" {
   source                    = each.value.source
   source_type               = "CIDR_BLOCK"
   description               = each.value.description
+  stateless                 = false
 
   dynamic "tcp_options" {
     for_each = each.value.protocol == "6" ? [1] : []
