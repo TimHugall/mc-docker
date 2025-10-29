@@ -1,0 +1,35 @@
+version: "3.7"
+services:
+  mc-bedrock:
+    image: itzg/minecraft-bedrock-server
+    container_name: mc-bedrock
+    restart: always
+    ports:
+      # Bedrock Edition uses UDP port 19132 by default
+      - "19132:19132/udp"
+    environment:
+      # Mandatory: Accept the Minecraft EULA
+      EULA: "TRUE"
+      # Server Settings
+      SERVER_NAME: "James' Server"
+      VERSION: "LATEST"
+      # --- IMPORTANT CHANGE HERE ---
+      GAMEMODE: "creative"
+      # --- IMPORTANT CHANGE HERE ---
+      DIFFICULTY: "peaceful" # Set to peaceful so no hostile mobs spawn
+      MAX_PLAYERS: 3
+      # Security (Set to true to only allow players on the whitelist)
+      # TEMPORARILY DISABLED to collect gamertags - re-enable after adding friends to allowlist
+      ALLOW_LIST: "false"
+      # Optional: Set the initial player permissions level (member, operator, visitor)     
+      DEFAULT_PLAYER_PERMISSION_LEVEL: "member"
+      ENABLE_LAN_VISIBILITY: "false" # Don't broadcast on LAN
+      # Optionally set a server password message in MOTD
+      SERVER_MOTD: "James' Private Server - Whitelisted Players Only"
+    volumes:
+      # Persists server data (worlds, configuration, logs) outside the container
+      - /home/ubuntu/mc-bedrock-data:/data
+
+volumes:
+  # Define the persistent volume
+  mc-bedrock-data:
