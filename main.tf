@@ -53,21 +53,24 @@ locals {
   # Security Lists have limits too - OCI allows up to 25 stateful ingress rules per security list
   # We'll aggregate by taking larger CIDR blocks (smaller prefix lengths = larger blocks)
   # Sort by prefix length and take the first 20 largest blocks
-  sorted_prefixes = sort([
+  
+  # First, create a list of objects with prefix and length
+  prefixes_with_len = [
     for prefix in local.australia_prefixes : {
       cidr = prefix
       # Extract prefix length (e.g., "192.168.0.0/24" -> 24)
       prefix_len = tonumber(split("/", prefix)[1])
     }
-  ])
+  ]
   
-  # Sort by prefix length (ascending) to get largest blocks first
+  # Sort the CIDR strings by their prefix length (smaller = larger block)
+  # Then take the first 20
   largest_au_blocks = [
     for item in slice(
-      sort([for p in local.australia_prefixes : p]),
+      sort([for p in local.prefixes_with_len : format("%02d-%s", p.prefix_len, p.cidr)]),
       0,
       min(20, length(local.australia_prefixes))
-    ) : item
+    ) : substr(item, 3, length(item) - 3)  # Remove the "XX-" prefix (2 digits + dash = 3 chars)
   ]
 }
 
