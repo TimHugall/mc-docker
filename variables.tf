@@ -14,7 +14,7 @@ variable "nsg_id" {
 }
 
 variable "allowed_ports" {
-  description = "List of ports to allow from East Coast Australia IPs"
+  description = "List of ports to allow from Australian IPs"
   type        = list(number)
-  default     = [22, 25565] # SSH and Minecraft default port
+  default     = [22, 19132, 19133] # SSH and Minecraft Bedrock ports
 }

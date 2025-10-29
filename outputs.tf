@@ -13,9 +13,9 @@ output "nsg_id" {
   value       = data.oci_core_network_security_group.main.id
 }
 
-output "east_coast_au_ip_count" {
-  description = "Number of Australia IP prefixes found"
-  value       = length(local.east_coast_au_prefixes)
+output "allowed_ports" {
+  description = "List of ports allowed from Australian IPs"
+  value       = var.allowed_ports
 }
 
 output "total_rules_created" {
@@ -23,7 +23,7 @@ output "total_rules_created" {
   value       = length(local.security_rules)
 }
 
-output "allowed_ports" {
-  description = "Ports configured to allow from East Coast Australia"
-  value       = var.allowed_ports
+output "australian_isp_ranges" {
+  description = "Number of Australian ISP CIDR ranges configured"
+  value       = length(local.all_au_ranges)
 }
