@@ -1,5 +1,14 @@
 version: "3.7"
 services:
+        #watchtower:
+        #image: containrrr/watchtower:1.7.1 # 1.4.0
+        #container_name: watchtower
+        #volumes:
+        #- "/etc/timezone:/etc/timezone:ro"
+        #- "/etc/localtime:/etc/localtime:ro"
+        #- "/var/run/docker.sock:/var/run/docker.sock"
+        #restart: unless-stopped
+
   mc-bedrock:
     image: itzg/minecraft-bedrock-server
     container_name: mc-bedrock
@@ -12,15 +21,14 @@ services:
       EULA: "TRUE"
       # Server Settings
       SERVER_NAME: "James' Server"
-      VERSION: "LATEST"
+      VERSION: "LATEST" # "v1.21.114"
       # --- IMPORTANT CHANGE HERE ---
       GAMEMODE: "creative"
       # --- IMPORTANT CHANGE HERE ---
       DIFFICULTY: "peaceful" # Set to peaceful so no hostile mobs spawn
-      MAX_PLAYERS: 3
+      MAX_PLAYERS: 6
       # Security (Set to true to only allow players on the whitelist)
-      # TEMPORARILY DISABLED to collect gamertags - re-enable after adding friends to allowlist
-      ALLOW_LIST: "false"
+      ALLOW_LIST: "true"
       # Optional: Set the initial player permissions level (member, operator, visitor)     
       DEFAULT_PLAYER_PERMISSION_LEVEL: "member"
       ENABLE_LAN_VISIBILITY: "false" # Don't broadcast on LAN
@@ -29,6 +37,9 @@ services:
     volumes:
       # Persists server data (worlds, configuration, logs) outside the container
       - /home/ubuntu/mc-bedrock-data:/data
+      # Timezone
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
 
 volumes:
   # Define the persistent volume

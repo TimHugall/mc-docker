@@ -5,10 +5,12 @@
 .terraform.lock.hcl
 crash.log
 crash.*.log
+*tfplan*
 
 # Variable files with sensitive data
 terraform.tfvars
 *.auto.tfvars
+*tfvars*
 
 # Override files
 override.tf

@@ -22,5 +22,5 @@ variable "allowed_ports" {
 variable "enable_geo_restriction" {
   description = "Enable Australian-only IP filtering. Set to false to allow worldwide access."
   type        = bool
-  default     = true
+  default     = false
 }
